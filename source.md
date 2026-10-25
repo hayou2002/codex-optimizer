@@ -43,5 +43,7 @@ they are not runtime files of this project.
 The source date task is eligible for soft deletion: its project material is
 published, its independent manual is archived with hashes, its kdocs expansion
 matches the installed copy, and configurable text contains no reference to the
-date path. The batch manifest and rollback record are kept under
-`_temp/trash/`.
+date path. A complete recovery copy and 402-entry SHA256 manifest are staged at
+`C:\Users\Administrator\Desktop\OH-WorkSpace\_temp\trash\date-task-https-wpsai-wpscdn-cn-skillhub-pro-20261026T183200\`.
+The original directory is still locked as this Codex session's working
+directory, so relocating it must happen after the session closes.
