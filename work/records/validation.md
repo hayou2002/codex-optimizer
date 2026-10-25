@@ -22,6 +22,23 @@
   `C:\Users\Administrator\.codex\skills\codex-optimizer` match the project
   source by SHA256.
 - Release package size and digest are recorded in `release.md`.
+- Release verification:
+  - GitHub repository is public and uses `main` as the default branch.
+  - `v0.1.0` is a published, non-draft, non-prerelease tag release.
+  - Release API reported a 44,779-byte ZIP with matching SHA256.
+  - Downloading the Release asset again reproduced the same digest.
+  - All 15 installed runtime files match the project source.
+  - Raw `README.md`, `LICENSE`, and `SKILL.md` are present on `main`.
+- kdocs:
+  - Installed skill remains at `C:\Users\Administrator\.codex\skills\kdocs`.
+  - CLI 2.7.1 resolves an authenticated token from the system keychain.
+  - The extracted 2.7.6 package has 399 files; all 399 match the installed
+    skill by SHA256.
+- `good-learning`:
+  - Installed at `C:\Users\Administrator\.codex\skills\good-learning`.
+  - Upstream `SKILL.md` SHA256:
+    `935043c22aaa18a974baffc493522996f628d754375d8478261054ea1deee123`.
+  - `quick_validate.py` passes.
 
 ## Shared collaboration follow-up
 
@@ -36,3 +53,6 @@
 - Hanako's installed `hana-optimizer` copy matches its current source for the
   updated `SKILL.md` and collaboration reference. Its pre-update skill was
   backed up under the shared recovery area.
+- Hanako collaboration commit:
+  `66f993e587b393725f8776f321d527e85e0f7494` on public `main`.
+  The raw remote skill entry and collaboration reference match local source.

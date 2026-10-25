@@ -10,6 +10,9 @@
 - Upstream project: `https://github.com/hayou2002/hana-optimizer`
 - Upstream generalization PR: `#1`
 - Created: 2026-10-26
+- Published repository: `https://github.com/hayou2002/codex-optimizer`
+- Published release:
+  `https://github.com/hayou2002/codex-optimizer/releases/tag/v0.1.0`
 
 ## Migrated material
 
@@ -19,12 +22,22 @@
 
 ## Retained outside the project
 
-The original date task also contains WPS kdocs installation material, a Codex
-manual, and generic session scratch files. These are separate work products or
-intermediate material and are not part of this project's source.
+The original date task also contained a WPS kdocs 2.7.6 package and expansion.
+Its 399 files now match the installed
+`C:\Users\Administrator\.codex\skills\kdocs` copy by SHA256 and are reproducible
+from the public package URL.
+
+The source date directory also contains:
+
+- `work\codex-manual\codex-manual.md`
+- `work\codex-manual\codex-manual.outline.md`
+
+These are independent Codex reference material. The project-local copy and
+source hash are under `work\source-archive\codex-manual\`.
 
 ## Date task migration status
 
-Not yet eligible for whole-directory soft deletion. The unrelated material must
-first be kept where its own installation or durable source already lives, or
-the user must explicitly choose another destination.
+The full migration conditions are not yet all satisfied. The kdocs copy is
+installed and reproducible, but the archived manual and source navigation
+session still provide provenance. The date directory is retained until the
+archive hashes are verified and an explicit final soft-delete decision is made.

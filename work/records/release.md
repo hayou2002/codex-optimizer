@@ -16,7 +16,20 @@
   `CHANGELOG.md`, `agents/`, `config/`, `scripts/`, and `references/`).
 - Installation: `C:\Users\Administrator\.codex\skills\codex-optimizer`
 - Installed runtime files match the source by SHA256 (15 files).
+- Tag: [`v0.1.0`](https://github.com/hayou2002/codex-optimizer/tree/v0.1.0)
+  at `1e27c9958ee135645b2b305ef5f1d4385853922c`
+- Release:
+  [`v0.1.0`](https://github.com/hayou2002/codex-optimizer/releases/tag/v0.1.0)
+- Release assets:
+  - `codex-optimizer.skill.zip` (44,779 bytes)
+  - `codex-optimizer.skill.zip.sha256` (93 bytes)
 
-The Git tag and GitHub Release publish the final documentation commit after
-this record is committed. The published release URL, final tag commit, and
-downloaded attachment verification are appended below.
+## Verification
+
+- GitHub default branch: `main`.
+- Main branch after release creation:
+  `fccb047e3665ac7fffbff767bc65a8fdc2336611`.
+- The release asset was downloaded again from GitHub and its SHA256 matched
+  `6d911249a0cd3319c4bdef92e59096a6a3beb475d93aab9ab7659adabb9868a4`.
+- The downloaded archive contains 15 runtime files.
+- The raw remote `SKILL.md` matches the project source.
