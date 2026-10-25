@@ -47,6 +47,17 @@ python scripts/codex_optimizer.py quick-project --root "<root>" --git-url "<url>
 - **安全清理**：删除、覆盖、跨盘移动、处理凭据/数据库/运行态，或来源不唯一时，使用完整的扫描、计划、风险分级和回滚事务；用大小、修改时间即可判断来源是否在计划后变化。只有跨盘复制后删源、文本冲突和发布包完整性才计算 SHA256。
 
 快速归位只做一次目标目录核验；不写双份检查点，不运行全工作区 `diagnose`，也不为不删除来源的普通复制另做备份。
+- **旧批次归档**：来源已在恢复区、原 batch 自带 manifest、目标只是换一个恢复区位置时，用
+  `archive_batch` 一次完成预检、移动、索引和验证。不要临时写脚本、`py_compile`
+  或给每个 batch 生成第二套事务；坏路径 batch 记入 skipped，其余继续。保留原
+  manifest 就可恢复，不逐行重建或比对目录内容：
+
+```powershell
+python scripts/codex_optimizer.py archive-batch --root "<root>" --source-dir "<batch>"
+```
+
+`archive-batch` 从恢复区顶层选取批次，所以 `--source-dir` 应传恢复区根目录；
+用户点名批次时重复传入 `--name "<批次>"`。
 
 ## 四个治理板块
 
@@ -122,11 +133,15 @@ _temp/plans/
 严格使用：
 
 ```text
-扫描 -> 分类 -> 完整计划 -> 风险分级 -> 执行 -> 验证 -> 检查点
+扫描 -> 分类 -> 方案 -> 风险分级 -> 确认 -> 执行 -> 一次验证
 ```
 
 - `diagnose` 默认零写入。需要 CLI 已生成的报告或计划时显式加 `--json` 或 `--plan`；不要用 `--json <路径>`。
-- `apply` 默认只展示计划。低风险缓存与临时项确认后可用 `--execute`；项目复制、引用改写、唯一源处理和目录软删属于高风险批次，执行前展示动作摘要。
+- `apply` 默认只展示计划。批量执行用一次事务；低风险缓存与临时项确认后可用
+  `--execute`；项目复制、引用改写、唯一源处理和目录软删属于高风险批次，执行前展示动作摘要。
+- 同一目标不要连续运行 `diagnose`、`apply --help`、临时脚本编译和多轮目录统计。
+  计划已经保证边界与元数据时，执行后只核对状态、数量、目标存在性；manifest、
+  transaction 和 CLI 输出已经覆盖的内容不重复写成第二份报告。
 - 同一路径只保留当前可用版本。优先采用项目主版本；日期材料是否“在用”取自关联会话的实际文件访问和用户明确声明，不以 mtime 单独作因果判断。
 - 只有存在 lockfile、构建清单或显式可再生规则等重建证据时，缓存才可自动回收。
 - 搜索默认根、当前项目、`AGENTS.md`、skills、rules 和自动化中的关键引用；命中引用的文件不自动清理。
@@ -152,7 +167,11 @@ _temp/plans/
 - 现场可验证事实优先。无法确定时保留双方并标记待裁决。
 - 记忆文件可能与后台生成重写；下次运行发现 hash 变化时报告，不静默覆盖。
 
-每次实际改动写一条简明记录：操作、结果、恢复路径。快速归位由 `source.md` 承担，安全清理由批次检查点承担，实际协作由交接事件承担，不再默认三处各写一遍。细节见 [项目迁移](references/03-project-migration.md) 和 [知识与记忆](references/04-knowledge-and-memory.md)。
+每次实际改动只写一条简明记录：操作、结果、恢复路径。快速归位由 `source.md`
+承担，安全清理由批次 transaction 加一条检查点承担，旧批次归档由索引承担，
+实际协作由交接事件承担。不要为同一动作再写全局报告、项目记录和复核清单。
+细节见 [项目迁移](references/03-project-migration.md) 和
+[知识与记忆](references/04-knowledge-and-memory.md)。
 
 ## CLI
 
@@ -165,6 +184,8 @@ python "$env:USERPROFILE\.codex\skills\codex-optimizer\scripts\codex_optimizer.p
 日常子命令：
 
 - `quick-project`：显式来源的快速复制、移动或 Git 克隆；无需清理级计划或第二份备份。
+- `archive-batch`：将已带 manifest 的旧恢复批次直接软归档；坏路径批次跳过，成功后
+  只输出批次、数量、索引路径和一条恢复命令。
 - `diagnose`：只读扫描；可生成 JSON 报告或计划。
 - `apply`：默认 dry-run；验证计划完整性、30 分钟有效期和相应的现场元数据后用 `--execute` 执行。
 - `rollback`：按批次恢复回收文件、项目复制和文本改写；路径冲突时停止且不覆盖。

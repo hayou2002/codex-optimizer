@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-10-26
+
+- Add `archive-batch` for same-volume archival of legacy recovery batches that
+  already carry manifests.
+- Skip invalid legacy batches instead of restarting or hand-repairing the whole
+  archive operation.
+- Collapse repeated diagnostics, temporary helper compilation, transaction
+  repair, and duplicate verification into one execution with one result check.
+
 ## 0.2.0 - 2026-10-26
 
 - Add `quick-project` for explicit local and Git project adoption.

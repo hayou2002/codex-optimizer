@@ -276,7 +276,7 @@ def path_record(path: Path) -> dict[str, Any]:
 
 def load_json(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except FileNotFoundError as exc:
         raise OptimizerError(f"Required file does not exist: {path}") from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -2087,6 +2087,124 @@ def purge_safe_trash(root: Path, now: float | None = None) -> dict[str, Any]:
     return {"purged": purged, "retained": retained}
 
 
+def archive_batch(
+    root: Path,
+    source_dir: Path,
+    names: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Move manifest-backed recovery batches; skip invalid batches and continue."""
+    root = canonical(root)
+    source_dir = canonical(source_dir)
+    source_root = root / "_temp"
+    if not source_dir.is_dir() or not is_within(source_dir, source_root):
+        raise OptimizerError(f"Source directory must be inside {source_root}: {source_dir}")
+    if is_reparse(source_dir):
+        raise OptimizerError(f"Refusing reparse-point source: {source_dir}")
+
+    candidates = sorted(
+        item for item in safe_iterdir(source_dir, follow_links=False)
+        if item.is_dir()
+    )
+    if names is not None:
+        allowed = set(names)
+        candidates = [item for item in candidates if item.name in allowed]
+        missing = sorted(allowed - {item.name for item in candidates})
+        if missing:
+            raise OptimizerError(f"Requested batch not found: {', '.join(missing)}")
+
+    eligible: list[tuple[Path, int]] = []
+    skipped: list[dict[str, str]] = []
+    for candidate in candidates:
+        manifest = candidate / ".manifest.jsonl"
+        try:
+            if is_reparse(candidate):
+                raise OptimizerError("batch is a reparse point")
+            if not manifest.is_file():
+                raise OptimizerError("missing .manifest.jsonl")
+            if any(is_reparse(item) for item in candidate.rglob("*")):
+                raise OptimizerError("batch contains a reparse point")
+            count = 0
+            for line in manifest.read_text(encoding="utf-8-sig").splitlines():
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                if not isinstance(record, dict) or "from" not in record or "to" not in record:
+                    raise OptimizerError("manifest entry lacks from/to")
+                source_path = Path(str(record["from"]))
+                destination_path = Path(str(record["to"]))
+                if not source_path.is_absolute() or not destination_path.is_absolute():
+                    raise OptimizerError("manifest entry uses a relative path")
+                if "反悔区" not in destination_path.parts:
+                    raise OptimizerError("manifest destination is not a recovery batch")
+                count += 1
+            if not count:
+                raise OptimizerError("manifest is empty")
+            eligible.append((candidate, count))
+        except (OSError, UnicodeError, json.JSONDecodeError, OptimizerError) as exc:
+            skipped.append({"name": candidate.name, "reason": str(exc)})
+
+    if not eligible:
+        return {"status": "nothing-to-do", "moved": [], "skipped": skipped}
+
+    batch_id = dt.datetime.now().strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    destination_root = root / "_temp" / "archive" / "legacy-trash" / batch_id
+    index = destination_root / "archive-index.jsonl"
+    transaction = destination_root / "transaction.json"
+    moved: list[dict[str, Any]] = []
+    try:
+        for source, count in eligible:
+            destination = destination_root / source.name
+            if destination.exists():
+                raise OptimizerError(f"Archive target already exists: {destination}")
+            shutil.move(str(source), str(destination))
+            record = {
+                "kind": "legacy-archive",
+                "name": source.name,
+                "from": str(source),
+                "to": str(destination),
+                "manifestEntries": count,
+                "timestamp": iso_now(),
+            }
+            moved.append(record)
+            append_manifest(index, record)
+            write_json(transaction, {
+                "batchId": batch_id,
+                "state": "in-progress",
+                "completed": moved,
+            })
+        write_json(transaction, {
+            "batchId": batch_id,
+            "state": "complete",
+            "completed": moved,
+            "skipped": skipped,
+            "completedAt": iso_now(),
+        })
+    except Exception:
+        for record in reversed(moved):
+            source = Path(record["from"])
+            destination = Path(record["to"])
+            if destination.exists() and not source.exists():
+                source.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(destination), str(source))
+        write_json(transaction, {
+            "batchId": batch_id,
+            "state": "rolled-back",
+            "completed": moved,
+            "skipped": skipped,
+            "failedAt": iso_now(),
+        })
+        raise
+
+    return {
+        "status": "complete",
+        "batchId": batch_id,
+        "moved": [record["name"] for record in moved],
+        "skipped": skipped,
+        "index": str(index),
+        "transaction": str(transaction),
+    }
+
+
 def format_bytes(value: int) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
     amount = float(value)
@@ -2180,6 +2298,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Relocate a local source instead of copying it.",
     )
+
+    archive = sub.add_parser(
+        "archive-batch",
+        help="Archive manifest-backed recovery batches in one transaction.",
+    )
+    common(archive)
+    archive.add_argument("--source-dir", type=Path, required=True)
+    archive.add_argument("--name", action="append", default=[])
 
     apply = sub.add_parser("apply", help="Validate and optionally execute a plan.")
     common(apply)
@@ -2291,6 +2417,10 @@ def main(argv: list[str] | None = None) -> int:
                 move=args.move,
                 description=args.description,
             )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.command == "archive-batch":
+            result = archive_batch(root, args.source_dir, args.name or None)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == "apply":

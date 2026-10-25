@@ -527,6 +527,43 @@ class ProjectAndConfigurationTests(WorkspaceTestCase):
         )
         self.assertTrue((project / "source.md").is_file())
 
+    def test_archive_batch_moves_valid_and_skips_invalid(self) -> None:
+        recovery = self.root / "_temp" / "反悔区"
+        good = recovery / "20260101-daily"
+        bad = recovery / "20260102-daily"
+        good.mkdir(parents=True)
+        bad.mkdir(parents=True)
+        (good / ".manifest.jsonl").write_text(
+            "\ufeff"
+            + json.dumps({
+                "from": str(self.root / "old"),
+                "to": str(good / "old"),
+            })
+            + "\n",
+            encoding="utf-8",
+        )
+        (bad / ".manifest.jsonl").write_text(
+            json.dumps({"from": "old", "to": "archived/old"}) + "\n",
+            encoding="utf-8",
+        )
+
+        result = optimizer.archive_batch(self.root, recovery)
+
+        archive = Path(result["transaction"]).parent
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["moved"], ["20260101-daily"])
+        self.assertEqual(
+            [item["name"] for item in result["skipped"]],
+            ["20260102-daily"],
+        )
+        self.assertFalse(good.exists())
+        self.assertTrue(bad.exists())
+        self.assertTrue((archive / "20260101-daily" / ".manifest.jsonl").is_file())
+        self.assertEqual(
+            json.loads(Path(result["transaction"]).read_text(encoding="utf-8"))["state"],
+            "complete",
+        )
+
     def test_initialization_is_idempotent_and_preserves_values(self) -> None:
         rules = self.root / ".optimize" / "codex-rules.json"
         rules.parent.mkdir()

@@ -67,6 +67,25 @@ python $cli quick-project --root $root `
 
 安全清理仍使用完整计划与回滚；普通复制只核大小和修改时间，不另做逐文件 SHA256 与第二份备份。租约只在发现活跃并发或实际交接时使用。
 
+### 归档旧恢复批次
+
+当多个旧批次已经在恢复区、每个批次自带 `.manifest.jsonl`，只是转存到另一个恢复位置：
+
+```powershell
+python $cli archive-batch --root $root --source-dir "$root\_temp\反悔区"
+```
+
+命令会整体预检并逐批移动，保留原 manifest，写一份索引和事务，然后验证一次。
+路径、编码或结构不合格的批次会进入 `skipped`，不会触发整批重跑。不要为这个
+场景临时写 Python 脚本、运行编译，或给每个批次补第二套事务。
+
+只处理指定批次时重复传入 `--name`：
+
+```powershell
+python $cli archive-batch --root $root `
+  --source-dir "$root\_temp\反悔区" --name "20261008"
+```
+
 ## 目录模型
 
 ```text
@@ -171,6 +190,7 @@ python $cli rollback --root "$env:USERPROFILE\Desktop\OH-WorkSpace" --batch-id "
 - 所有删除先进入 `_temp/trash/<batch>`，JSONL manifest 记录源、目标、大小和修改时间；跨盘复制后删源、同名冲突和发布完整性才计算 SHA256。
 - 安全回收项保留 14 天；高风险项不会自动清空。
 - 回收区存在带 `transaction.json` 的完整批次时，可在到期后运行 `purge`；默认仍为 dry-run。
+- 已有自管 manifest 的旧批次可用 `archive-batch` 一次性软归档；坏批次跳过并写入事务，不拦截其余批次。
 - 批量失败自动恢复本次已执行步骤。
 - 路径、符号链接和治理边界在执行前重新验证。
 
