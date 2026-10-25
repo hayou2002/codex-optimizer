@@ -87,6 +87,38 @@ EXCLUDED_PROJECT_PARTS = {
 PROTECTED_FILENAMES = {
     ".env", "auth.json", "credentials.json", "secrets.json",
 }
+ORGANIZE_ROOT_KEEP_NAMES = {
+    "projects", "storage", "inbox", "_temp", "个性化", ".server", "_tools",
+    ".optimize", "agents.md", ".gitignore",
+}
+ORGANIZE_ROOT_RESERVED_NAMES = {
+    "oh-works", "oh-媒体库", "魔术卡", "cards",
+}
+ORGANIZE_ROOT_RUNTIME_NAMES = {
+    ".codex-session-delete", ".hana-resource-io-targets",
+}
+ORGANIZE_SCAN_SKIP_DIRS = {
+    ".git", "node_modules", ".venv", "venv", "env", "__pycache__",
+    ".pytest_cache", ".mypy_cache", ".ruff_cache",
+}
+ORGANIZE_PROCESS_DIR_NAMES = {
+    "browser-profile", "browser-profiles", "chrome-profile", "edge-profile",
+    "playwright-profile", "puppeteer-profile", "user-data", "user data",
+}
+ORGANIZE_PROFILE_PARENTS = {
+    "browser", "browser-profile", "browser-profiles", "chrome",
+    "chrome-profile", "edge", "edge-profile", "playwright",
+    "puppeteer", "user-data",
+}
+ORGANIZE_CACHE_DIR_NAMES = {
+    ".cache", "cache", "caches", "tmp", "temp",
+}
+ORGANIZE_PROCESS_SCAN_BRANCHES = {
+    "work", "outputs", "_temp", "temp", "tmp", "cache", "caches",
+}
+ORGANIZE_DATABASE_SUFFIXES = {
+    ".db", ".db-wal", ".db-shm", ".sqlite", ".sqlite-wal", ".sqlite-shm",
+}
 
 
 class OptimizerError(RuntimeError):
@@ -835,7 +867,6 @@ def quick_project(
         adopted_from = str(source_path)
 
     created_docs: list[str] = []
-    created_project_record = not (destination / "AGENTS.md").exists()
     readme = destination / "README.md"
     if not readme.exists():
         summary = description.strip() or f"{base_slug} project."
@@ -857,17 +888,6 @@ def quick_project(
             f"- Created: {iso_now()}\n",
         )
         created_docs.append("source.md")
-    if created_project_record:
-        write_text_atomic(
-            destination / "AGENTS.md",
-            "# Project Instructions\n\n"
-            "- Start with `README.md`; read `source.md` for provenance.\n"
-            "- Keep working files under `work/` and deliverables under `outputs/`.\n"
-            "- Use `work/checkpoints/` only for changes that actually need recovery.\n"
-            "- Do not copy credentials, databases, caches, or runtime logs here.\n",
-        )
-        created_docs.append("AGENTS.md")
-
     return {
         "status": "ready",
         "operation": operation,
@@ -875,6 +895,259 @@ def quick_project(
         "source": adopted_from,
         "createdDocs": created_docs,
         "ignoredSensitiveOrCacheItems": sorted(ignored),
+    }
+
+
+def _age_days(path: Path, now: float) -> float:
+    try:
+        return round(max(0.0, (now - path.stat().st_mtime) / 86400), 1)
+    except OSError:
+        return 0.0
+
+
+def _organize_entry(path: Path, root: Path, now: float) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "path": str(canonical(path)),
+        "relativePath": path.relative_to(root).as_posix(),
+        "kind": "directory" if path.is_dir() else "file",
+        "ageDays": _age_days(path, now),
+    }
+    try:
+        record["sizeBytes"] = path.stat().st_size
+    except OSError:
+        record["sizeBytes"] = 0
+    return record
+
+
+def _project_process_data(
+    project: Path,
+    *,
+    max_entries: int = 400,
+    max_depth: int = 4,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Find high-risk process artifacts without reading their contents."""
+    findings: list[dict[str, Any]] = []
+    bytes_observed = 0
+    entries = 0
+    truncated = False
+    stack: list[tuple[Path, int, bool]] = [(project, 0, False)]
+
+    while stack:
+        current, depth, process_branch = stack.pop()
+        try:
+            children = list(safe_iterdir(current, follow_links=False))
+        except OSError:
+            continue
+        for child in children:
+            entries += 1
+            if entries > max_entries:
+                truncated = True
+                stack.clear()
+                break
+            if is_reparse(child):
+                continue
+            try:
+                relative_parts = {
+                    part.lower() for part in child.relative_to(project).parts
+                }
+                if child.is_file():
+                    bytes_observed += child.stat().st_size
+            except OSError:
+                relative_parts = set()
+            if "_temp" in relative_parts and relative_parts.intersection({
+                "trash", "archive",
+            }):
+                continue
+
+            lowered_name = child.name.lower()
+            marker_dir = (
+                child.is_dir()
+                and lowered_name in ORGANIZE_PROCESS_DIR_NAMES
+            )
+            cache_dir = (
+                child.is_dir()
+                and lowered_name in ORGANIZE_CACHE_DIR_NAMES
+            )
+            database = (
+                child.is_file()
+                and child.suffix.lower() in ORGANIZE_DATABASE_SUFFIXES
+            )
+            profile_child = False
+            if child.is_dir():
+                profile_child = (
+                    lowered_name == "default"
+                    and child.parent.name.lower() in ORGANIZE_PROFILE_PARENTS
+                ) or any(
+                    item.name.lower() in {"preferences", "local state"}
+                    for item in safe_iterdir(
+                        child, follow_links=False
+                    )
+                    if item.is_file()
+                )
+
+            if marker_dir or cache_dir or database or profile_child:
+                reason = (
+                    "browser profile" if marker_dir or profile_child
+                    else "runtime database" if database
+                    else "cache or temporary process data"
+                )
+                findings.append({
+                    "project": project.name,
+                    "path": str(canonical(child)),
+                "relativePath": child.relative_to(project.parent.parent).as_posix(),
+                    "reason": reason,
+                    "risk": "high",
+                    "recoveryRequired": True,
+                })
+                if child.is_dir():
+                    continue
+            if child.is_dir() and not profile_child:
+                child_is_process_branch = (
+                    lowered_name in ORGANIZE_PROCESS_SCAN_BRANCHES
+                )
+                if (
+                    lowered_name not in ORGANIZE_SCAN_SKIP_DIRS
+                    and (
+                        depth == 0
+                        or (
+                            process_branch
+                            and depth < max_depth
+                        )
+                    )
+                ):
+                    stack.append((
+                        child,
+                        depth + 1,
+                        process_branch or child_is_process_branch,
+                    ))
+
+    return findings, {
+        "entriesScanned": min(entries, max_entries),
+        "bytesObserved": bytes_observed,
+        "truncated": truncated,
+    }
+
+
+def organize_scan(root: Path, *, limit: int = 200) -> dict[str, Any]:
+    """Return one bounded, metadata-only inventory for the 03 workflow."""
+    root = canonical(root)
+    if not root.is_dir():
+        raise OptimizerError(f"Governance root is not a directory: {root}")
+    if canonical(root) == canonical(Path.home()):
+        raise OptimizerError(f"Refusing to scan the home directory: {root}")
+    if limit < 1:
+        raise OptimizerError("--limit must be at least 1")
+
+    now = time.time()
+    root_strays: list[dict[str, Any]] = []
+    reserved: list[dict[str, Any]] = []
+    runtime_hints: list[dict[str, Any]] = []
+    for child in sorted(
+        safe_iterdir(root, follow_links=False),
+        key=lambda item: item.name.lower(),
+    ):
+        lowered = child.name.lower()
+        if lowered in ORGANIZE_ROOT_RESERVED_NAMES:
+            reserved.append(_organize_entry(child, root, now))
+        elif lowered in ORGANIZE_ROOT_RUNTIME_NAMES:
+            runtime_hints.append(_organize_entry(child, root, now))
+        elif lowered not in ORGANIZE_ROOT_KEEP_NAMES:
+            root_strays.append(_organize_entry(child, root, now))
+
+    projects: list[dict[str, Any]] = []
+    process_data: list[dict[str, Any]] = []
+    scan_limits: list[dict[str, Any]] = []
+    project_dirs = [
+        item
+        for item in safe_iterdir(root / "projects", follow_links=False)
+        if item.is_dir() and not is_reparse(item)
+    ]
+    for project in sorted(
+        project_dirs, key=lambda item: item.name.lower()
+    )[:limit]:
+        process_findings, scan_info = _project_process_data(project)
+        process_data.extend(process_findings)
+        if scan_info["truncated"]:
+            scan_limits.append({"project": project.name, **scan_info})
+        projects.append({
+            "name": project.name,
+            "path": str(canonical(project)),
+            "entryFiles": {
+                "README.md": (project / "README.md").is_file(),
+                "source.md": (project / "source.md").is_file(),
+                "AGENTS.md": (project / "AGENTS.md").is_file(),
+            },
+            "gitRepository": (project / ".git").is_dir(),
+            "hasWorkOrOutputs": any(
+                (project / name).exists() for name in ("work", "outputs")
+            ),
+            "likelyMaintained": any([
+                (project / "README.md").is_file(),
+                (project / "source.md").is_file(),
+                (project / "AGENTS.md").is_file(),
+                (project / ".git").is_dir(),
+                any((project / name).exists() for name in ("work", "outputs")),
+            ]),
+            **scan_info,
+        })
+
+    inbox = [
+        _organize_entry(child, root, now)
+        for child in sorted(
+            safe_iterdir(root / "inbox", follow_links=False),
+            key=lambda item: item.name.lower(),
+        )[:limit]
+    ]
+    dated_tasks = dated_task_dirs(root)
+    dated_records = [
+        {
+            "path": str(canonical(task)),
+            "relativePath": task.relative_to(root).as_posix(),
+            "ageDays": _age_days(task, now),
+        }
+        for task in sorted(dated_tasks)[:limit]
+    ]
+
+    warnings: list[str] = []
+    if len(project_dirs) > limit:
+        warnings.append(f"project list limited to {limit} of {len(project_dirs)}")
+    if len(dated_tasks) > limit:
+        warnings.append(
+            f"dated task list limited to {limit} of {len(dated_tasks)}"
+        )
+    if scan_limits:
+        warnings.append(
+            f"{len(scan_limits)} project process-data scan(s) reached the entry limit"
+        )
+
+    return {
+        "status": "read-only",
+        "root": str(root),
+        "rootStrays": root_strays,
+        "reserved": reserved,
+        "runtimeHints": runtime_hints,
+        "projects": projects,
+        "processData": process_data,
+        "inbox": inbox,
+        "datedTasks": dated_records,
+        "groups": {
+            "ready": [item["path"] for item in root_strays],
+            "isolate": [item["path"] for item in process_data],
+            "keepOrReport": [
+                item["path"] for item in reserved + runtime_hints
+            ],
+        },
+        "summary": {
+            "rootStrays": len(root_strays),
+            "reserved": len(reserved),
+            "runtimeHints": len(runtime_hints),
+            "projects": len(project_dirs),
+            "projectsReported": len(projects),
+            "processData": len(process_data),
+            "inboxItems": len(inbox),
+            "datedTasks": len(dated_tasks),
+        },
+        "warnings": warnings,
     }
 
 
@@ -2283,6 +2556,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect links only if they remain inside an allowed root.",
     )
 
+    organize = sub.add_parser(
+        "organize-scan",
+        help="Run one bounded, read-only inventory for the 03 workflow.",
+    )
+    common(organize)
+    organize.add_argument(
+        "--limit", type=int, default=200,
+        help="Maximum projects, inbox items, and dated tasks to report.",
+    )
+
     quick = sub.add_parser(
         "quick-project",
         help="Adopt one explicit local or Git project without a cleanup plan.",
@@ -2407,6 +2690,10 @@ def main(argv: list[str] | None = None) -> int:
                 output = root / "_temp" / "plans" / f"{stamp}-codex-optimizer-plan.json"
                 write_json(output, plan, exclusive=False)
                 print(f"Plan: {output} ({len(plan['actions'])} actions)")
+            return 0
+        if args.command == "organize-scan":
+            result = organize_scan(root, limit=args.limit)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == "quick-project":
             result = quick_project(

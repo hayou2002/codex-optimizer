@@ -139,6 +139,77 @@ class DiagnosticTests(WorkspaceTestCase):
         self.assertEqual(report["projectCandidates"][0]["slug"], "sample")
         self.assertGreaterEqual(report["projectCandidates"][0]["score"], 6)
 
+    def test_organize_scan_is_bounded_read_only_and_classifies_risk(self) -> None:
+        (self.root / "loose.txt").write_text("loose", encoding="utf-8")
+        (self.root / "OH-Works").mkdir()
+        (self.root / ".codex-session-delete").mkdir()
+
+        documented = self.root / "projects" / "documented"
+        documented.mkdir()
+        (documented / "README.md").write_text("# Ready\n", encoding="utf-8")
+        (documented / "source.md").write_text("# Source\n", encoding="utf-8")
+
+        profile_root = (
+            self.root / "projects" / "processing" / "browser-profile"
+        )
+        profile = profile_root / "Default"
+        profile.mkdir(parents=True)
+        cache = self.root / "projects" / "processing" / "cache"
+        cache.mkdir()
+        (cache / "blob.bin").write_bytes(b"cache")
+        database = self.root / "projects" / "processing" / "runtime.sqlite"
+        database.write_bytes(b"db")
+
+        self.write("inbox/new.txt", "inbox")
+        task = self.root / "2026-10-25" / "sample"
+        task.mkdir(parents=True)
+        (task / "README.md").write_text("task", encoding="utf-8")
+
+        reserved = self.root / "OH-Works"
+        runtime = self.root / ".codex-session-delete"
+        before = sorted(
+            str(path.relative_to(self.root))
+            for path in self.root.rglob("*")
+        )
+        report = optimizer.organize_scan(self.root, limit=20)
+        after = sorted(
+            str(path.relative_to(self.root))
+            for path in self.root.rglob("*")
+        )
+
+        self.assertEqual(before, after)
+        self.assertEqual(report["status"], "read-only")
+        self.assertIn(
+            str(optimizer.canonical(self.root / "loose.txt")),
+            report["groups"]["ready"],
+        )
+        self.assertIn(
+            str(optimizer.canonical(reserved)),
+            report["groups"]["keepOrReport"],
+        )
+        self.assertIn(
+            str(optimizer.canonical(runtime)),
+            report["groups"]["keepOrReport"],
+        )
+        process_paths = {
+            item["path"] for item in report["processData"]
+        }
+        self.assertIn(
+            str(optimizer.canonical(profile_root)), process_paths
+        )
+        self.assertIn(str(optimizer.canonical(cache)), process_paths)
+        self.assertIn(str(optimizer.canonical(database)), process_paths)
+        project = next(
+            item for item in report["projects"]
+            if item["name"] == "documented"
+        )
+        self.assertTrue(project["entryFiles"]["README.md"])
+        self.assertTrue(project["entryFiles"]["source.md"])
+        self.assertNotIn(
+            str(documented),
+            report["groups"]["ready"],
+        )
+
 
 class PlanValidationTests(WorkspaceTestCase):
     def test_trash_and_rollback(self) -> None:
@@ -415,7 +486,7 @@ class ProjectAndConfigurationTests(WorkspaceTestCase):
             "print('ok')\n",
         )
         self.assertTrue((project / "source.md").is_file())
-        self.assertTrue((project / "AGENTS.md").exists())
+        self.assertFalse((project / "AGENTS.md").exists())
         self.assertFalse((project / "work").exists())
         self.assertFalse((project / "outputs").exists())
         self.assertFalse((project / "__pycache__").exists())
@@ -471,7 +542,7 @@ class ProjectAndConfigurationTests(WorkspaceTestCase):
         self.assertEqual(result["status"], "ready")
         self.assertEqual(
             result["createdDocs"],
-            ["README.md", "source.md", "AGENTS.md"],
+            ["README.md", "source.md"],
         )
         self.assertFalse(
             (self.root / "projects" / "lean-project" / "work").exists()

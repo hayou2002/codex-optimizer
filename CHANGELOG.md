@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 - 2026-10-26
+
+- Add `organize-scan` for a single read-only inventory during `03`.
+- Make project documentation repair demand-driven instead of applying it to all
+  historical projects.
+- Preserve private or runtime process data in a grouped high-risk recovery
+  transaction instead of forcing it through low-risk automatic cleanup.
+- Replace unconditional ten-step reference synchronization with targeted checks
+  based on whether paths and project identity actually changed.
+
 ## 0.3.0 - 2026-10-26
 
 - Add `archive-batch` for same-volume archival of legacy recovery batches that
