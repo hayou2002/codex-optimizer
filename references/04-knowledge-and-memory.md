@@ -56,8 +56,8 @@ Codex 主目录是生成状态。优先使用 `/memories` 和 Personalization �
 
 获准的受控直改流程：
 
-1. 记录原 path、size、mtime、SHA256。
-2. 将原文件复制到 `_temp/trash/<batch>/memory-backups/`。
+1. 编辑前记录原内容或 path、size、mtime；只有同一路径并发冲突、跨盘后删源或需要发布完整性时才强校验 SHA256。
+2. 同一事务内保存可恢复的原文本快照；不再给每次普通编辑另生成第二份文件备份。
 3. 使用临时文件原子替换。
 4. 保留 manifest 和差异摘要。
 5. 下次运行发现 hash 与记录不一致时报告，说明 Codex 可能后台重写。

@@ -23,8 +23,11 @@ Do not treat a default bounded diagnostic as a complete inventory. Use
 - The installed copy under `C:\Users\Administrator\.codex\skills\codex-optimizer`
   is generated from this directory.
 - The source lives in the shared `OH-WorkSpace/projects` directory used by both
-  Codex and Hanako. Read `.optimize/COLLABORATION.md` before editing shared
-  files; claim a lease for concurrent work and record handoffs plus checkpoints.
+  Codex and Hanako. Claim a lease only when concurrency exists or a handoff
+  occurs; ordinary single-Agent edits need no claim.
+- Use `quick-project` for explicit local or Git project adoption. Keep the full
+  plan and transaction for cleanup; use metadata checks for ordinary copies,
+  and reserve SHA256 plus extra recovery for destructive or conflict paths.
 - `.optimize/codex-rules.json` belongs to Codex Optimizer.
 - Hanako's `.optimize/rules.json` remains isolated.
 - Each Agent keeps its own Git checkout, cwd, sessions, credentials, and

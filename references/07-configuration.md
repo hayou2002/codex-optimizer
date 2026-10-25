@@ -50,7 +50,7 @@
 - `protectCodexState`: true
 - `followLinks`: false
 - `automaticHighRisk`: false
-- `hashBeforeMove`: true
+- `hashBeforeMove`: false；普通同盘移动依赖原子重命名，跨盘后删源另行计算 SHA256
 - `requireRegenerableEvidence`: true
 
 ### projectPromotion

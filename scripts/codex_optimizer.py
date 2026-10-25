@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -688,6 +689,195 @@ def project_destination_relative(source: Path, task: Path) -> Path:
     return Path("work") / relative
 
 
+def normalize_project_slug(value: str) -> str:
+    """Return a safe semantic project slug."""
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    if not slug:
+        raise OptimizerError(
+            "Project slug is empty after normalization; pass --slug with "
+            "lowercase ASCII letters or digits."
+        )
+    return slug
+
+
+def quick_project(
+    root: Path,
+    *,
+    source: Path | None = None,
+    git_url: str = "",
+    slug: str = "",
+    move: bool = False,
+    description: str = "",
+) -> dict[str, Any]:
+    """Adopt one explicit project without the cleanup transaction workflow."""
+    root = canonical(root)
+    if (
+        root == canonical(Path.home())
+        or len(root.parts) <= 1
+        or not root.is_dir()
+    ):
+        raise OptimizerError(f"Unsafe governance root: {root}")
+    if bool(source) == bool(git_url):
+        raise OptimizerError("Pass exactly one of --source or --git-url")
+    if move and not source:
+        raise OptimizerError("--move requires --source")
+
+    raw_slug = slug
+    source_path: Path | None = None
+    if source is not None:
+        source_path = canonical(source)
+        if not source_path.exists() or not source_path.is_dir():
+            raise OptimizerError(f"Project source is not a directory: {source_path}")
+        if source_path in {
+            canonical(Path.home()),
+            canonical(Path(source_path.anchor)),
+            DEFAULT_CODEX_HOME,
+        }:
+            raise OptimizerError(f"Unsafe project source: {source_path}")
+        if is_within(
+            source_path, canonical(DEFAULT_CODEX_HOME)
+        ) and is_codex_sensitive_path(source_path, DEFAULT_CODEX_HOME):
+            raise OptimizerError(f"Codex state path is not a project source: {source_path}")
+        raw_slug = raw_slug or source_path.name
+    else:
+        remote_name = git_url.rstrip("/").rsplit("/", 1)[-1]
+        if remote_name.endswith(".git"):
+            remote_name = remote_name[:-4]
+        raw_slug = raw_slug or remote_name
+
+    base_slug = normalize_project_slug(raw_slug)
+    projects = root / "projects"
+    projects.mkdir(parents=True, exist_ok=True)
+    destination = projects / base_slug
+    if destination.exists():
+        raise OptimizerError(f"Project destination already exists: {destination}")
+    if source_path is not None and (
+        is_within(destination, source_path) or is_within(source_path, destination)
+    ):
+        raise OptimizerError("Source and destination overlap")
+
+    ignored: list[str] = []
+    if git_url:
+        git = shutil.which("git")
+        if not git:
+            raise OptimizerError("git is required for --git-url")
+        result = subprocess.run(
+            [git, "clone", "--", git_url, str(destination)],
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode:
+            if destination.exists():
+                shutil.rmtree(destination, ignore_errors=True)
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise OptimizerError(f"git clone failed: {detail}")
+        adopted_from = git_url
+        operation = "cloned"
+    else:
+        assert source_path is not None
+
+        def ignore_items(directory: str, names: list[str]) -> set[str]:
+            current = Path(directory)
+            try:
+                relative = current.relative_to(source_path)
+            except ValueError:
+                relative = Path()
+            if ".git" in relative.parts:
+                return set()
+            skipped: set[str] = set()
+            for name in names:
+                candidate = current / name
+                is_skipped = (
+                    candidate.is_dir()
+                    and name.lower() in {
+                        "__pycache__", ".pytest_cache", ".mypy_cache",
+                        ".ruff_cache", "node_modules", ".venv", "venv",
+                    }
+                ) or (
+                    candidate.is_file()
+                    and (
+                        name.lower() in PROTECTED_FILENAMES
+                        or candidate.suffix.lower() in {
+                            ".pem", ".key", ".pfx", ".sqlite", ".sqlite-wal",
+                            ".sqlite-shm", ".db", ".db-wal", ".db-shm",
+                        }
+                    )
+                )
+                if is_skipped:
+                    skipped.add(name)
+                    ignored.append(
+                        (relative / name).as_posix()
+                        if relative.parts else name
+                    )
+            return skipped
+
+        if move:
+            try:
+                source_path.rename(destination)
+                operation = "moved"
+            except OSError:
+                shutil.copytree(
+                    source_path,
+                    destination,
+                    symlinks=True,
+                    ignore=ignore_items,
+                )
+                shutil.rmtree(source_path)
+                operation = "copied-and-removed-source"
+        else:
+            shutil.copytree(
+                source_path,
+                destination,
+                symlinks=True,
+                ignore=ignore_items,
+            )
+            operation = "copied"
+        adopted_from = str(source_path)
+
+    created_docs: list[str] = []
+    created_project_record = not (destination / "AGENTS.md").exists()
+    readme = destination / "README.md"
+    if not readme.exists():
+        summary = description.strip() or f"{base_slug} project."
+        write_text_atomic(
+            readme,
+            f"# {base_slug}\n\n{summary}\n\n"
+            "- Main edit location: this directory.\n"
+            f"- Source: {adopted_from}\n",
+        )
+        created_docs.append("README.md")
+    sources = destination / "source.md"
+    if not sources.exists():
+        write_text_atomic(
+            sources,
+            "# Project Source\n\n"
+            f"- Project: `{base_slug}`\n"
+            f"- Adopted from: `{adopted_from}`\n"
+            f"- Method: `{operation}`\n"
+            f"- Created: {iso_now()}\n",
+        )
+        created_docs.append("source.md")
+    if created_project_record:
+        write_text_atomic(
+            destination / "AGENTS.md",
+            "# Project Instructions\n\n"
+            "- Start with `README.md`; read `source.md` for provenance.\n"
+            "- Keep working files under `work/` and deliverables under `outputs/`.\n"
+            "- Use `work/checkpoints/` only for changes that actually need recovery.\n"
+            "- Do not copy credentials, databases, caches, or runtime logs here.\n",
+        )
+        created_docs.append("AGENTS.md")
+
+    return {
+        "status": "ready",
+        "operation": operation,
+        "project": str(destination),
+        "source": adopted_from,
+        "createdDocs": created_docs,
+        "ignoredSensitiveOrCacheItems": sorted(ignored),
+    }
+
+
 def build_report(root: Path, codex_home: Path, project_roots: list[Path],
                  deep: bool = False, follow_links: bool = False) -> dict[str, Any]:
     errors: list[str] = []
@@ -839,11 +1029,7 @@ def create_plan(
                 canonical(root) / "_temp" / "trash"
                 / "<batch>" / "items" / path.name
             ),
-            "sha256": (
-                record["sha256"]
-                if record["is_dir"] is False
-                else tree_digest(path)
-            ),
+            "sha256": "",
             "is_dir": record["is_dir"],
             "size": record["size"],
             "mtime": record["mtime"],
@@ -910,7 +1096,7 @@ def create_plan(
                     "kind": "copy_project",
                     "source": str(source_path),
                     "destination": str(destination / relative),
-                    "sha256": sha256_file(source_path),
+                    "sha256": "",
                     "is_dir": False,
                     "size": source_path.stat().st_size,
                     "mtime": source_path.stat().st_mtime,
@@ -1046,10 +1232,18 @@ def validate_plan(plan: dict[str, Any], root: Path, codex_home: Path) -> None:
                 )
             if not source.exists():
                 raise OptimizerError(f"Source no longer exists: {source}")
-            if source.is_file() and sha256_file(source) != action.get("sha256"):
-                raise OptimizerError(f"Source hash changed: {source}")
-            if source.is_dir() and tree_digest(source) != action.get("sha256"):
-                raise OptimizerError(f"Source tree hash changed: {source}")
+            if action["kind"] == "trash":
+                current = source.stat()
+                if (
+                    current.st_size != int(action.get("size", -1))
+                    or abs(current.st_mtime - float(action.get("mtime", 0))) > 1
+                ):
+                    raise OptimizerError(f"Source metadata changed: {source}")
+            elif (
+                action["kind"] == "rewrite_text"
+                and sha256_file(source) != action.get("sha256")
+            ):
+                raise OptimizerError(f"Text source changed: {source}")
 
 
 def checkpoint_path(base: Path) -> Path:
@@ -1238,7 +1432,7 @@ def append_manifest(manifest: Path, record: dict[str, Any]) -> None:
 
 
 def move_transaction(source: Path, destination: Path) -> tuple[str, bool]:
-    """Move atomically when possible, verifying every copy before removing source."""
+    """Move atomically; verify only a cross-volume copy before removing source."""
     if not destination.parent.exists():
         destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
@@ -1248,7 +1442,7 @@ def move_transaction(source: Path, destination: Path) -> tuple[str, bool]:
     try:
         os.replace(source, destination)
         kind = "directory" if destination.is_dir() else "file"
-        digest = tree_digest(destination)
+        digest = ""
         return digest, kind == "directory"
     except OSError as exc:
         if not (
@@ -1336,7 +1530,7 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                     )
                 ]
                 destination.mkdir(parents=True, exist_ok=True)
-                ensure_project_scaffold(
+                scaffold_created = ensure_project_scaffold(
                     destination,
                     action["projectSlug"],
                     action.get("sourceTasks", []),
@@ -1349,16 +1543,24 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                     "path": str(destination),
                     "created": created,
                     "access": access,
+                    "scaffoldCreated": scaffold_created,
                     "risk": "high",
                 }
                 completed.append(record)
             elif kind == "copy_project":
                 source = canonical(Path(action["source"]))
                 destination = canonical(Path(action["destination"]))
-                if sha256_file(source) != action["sha256"]:
-                    raise OptimizerError(f"Source hash changed: {source}")
+                current = source.stat()
+                if (
+                    current.st_size != int(action.get("size", -1))
+                    or abs(current.st_mtime - float(action.get("mtime", 0))) > 1
+                ):
+                    raise OptimizerError(f"Source metadata changed: {source}")
                 if destination.exists():
-                    if destination.is_file() and sha256_file(destination) == action["sha256"]:
+                    if (
+                        destination.is_file()
+                        and destination.stat().st_size == current.st_size
+                    ):
                         continue
                     # Copy destinations are always under projects/<slug>.
                     parts = canonical(Path(action["destination"])).parts
@@ -1382,7 +1584,7 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                 ) as stream:
                     temp_path = Path(stream.name)
                 shutil.copy2(source, temp_path)
-                if sha256_file(temp_path) != action["sha256"]:
+                if temp_path.stat().st_size != current.st_size:
                     temp_path.unlink(missing_ok=True)
                     raise OptimizerError(f"Project copy validation failed: {source}")
                 os.replace(temp_path, destination)
@@ -1393,7 +1595,7 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                     "from": str(source),
                     "to": str(destination),
                     "size": action["size"],
-                    "sha256": action["sha256"],
+                    "sha256": "",
                     "risk": "high",
                 }
                 completed.append(record)
@@ -1401,15 +1603,6 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                 source = canonical(Path(action["source"]))
                 if not source.exists() or sha256_file(source) != action["sha256"]:
                     raise OptimizerError(f"Text changed before rewrite: {source}")
-                backup = batch_dir / "rewrites" / source.name
-                counter = 2
-                while backup.exists():
-                    backup = backup.with_name(
-                        f"{source.stem}-{counter}{source.suffix}"
-                    )
-                    counter += 1
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, backup)
                 text = source.read_text(encoding="utf-8")
                 updated = text.replace(action["oldText"], action["newText"])
                 write_text_atomic(source, updated)
@@ -1418,7 +1611,7 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                     "batchId": batch_id,
                     "timestamp": iso_now(),
                     "path": str(source),
-                    "backup": str(backup),
+                    "beforeText": text,
                     "beforeSha256": action["sha256"],
                     "afterSha256": sha256_file(source),
                     "risk": "high",
@@ -1449,11 +1642,15 @@ def apply_plan(plan_path: Path, root: Path, codex_home: Path,
                 destination = Path(record["to"])
                 destination.unlink(missing_ok=True)
             elif record["kind"] == "rewrite_text":
-                backup = Path(record["backup"])
-                if backup.exists():
-                    os.replace(backup, Path(record["path"]))
+                write_text_atomic(
+                    Path(record["path"]),
+                    record["beforeText"],
+                )
             elif record["kind"] == "create_project" and record["created"]:
                 restore_project_access(Path(record["path"]), record["access"])
+            elif record["kind"] == "create_project":
+                for raw in record.get("scaffoldCreated", []):
+                    Path(raw).unlink(missing_ok=True)
         write_json(transaction, {
             "batchId": batch_id,
             "state": "rolled-back",
@@ -1504,8 +1701,6 @@ def rollback_batch(root: Path, batch_id: str) -> dict[str, Any]:
                 raise OptimizerError(f"Rewritten file is missing: {path}")
             if sha256_file(path) != record["afterSha256"]:
                 raise OptimizerError(f"Rewritten file changed after apply: {path}")
-            if not Path(record["backup"]).exists():
-                raise OptimizerError(f"Rewrite backup is missing: {record['backup']}")
     restored: list[dict[str, str]] = []
     for record in reversed(completed):
         if record["kind"] == "trash":
@@ -1521,15 +1716,19 @@ def rollback_batch(root: Path, batch_id: str) -> dict[str, Any]:
                 restored.append({"from": str(destination), "to": "removed"})
         elif record["kind"] == "rewrite_text":
             path = Path(record["path"])
-            backup = Path(record["backup"])
-            os.replace(backup, path)
-            restored.append({"from": str(backup), "to": str(path)})
+            write_text_atomic(path, record["beforeText"])
+            restored.append({"from": "transaction text snapshot", "to": str(path)})
         elif record["kind"] == "create_project" and record["created"]:
             restore_project_access(Path(record["path"]), record["access"])
             restored.append({
                 "from": record["path"],
                 "to": "original path state restored",
             })
+        elif record["kind"] == "create_project":
+            for raw in record.get("scaffoldCreated", []):
+                path = Path(raw)
+                if path.is_file():
+                    path.unlink(missing_ok=True)
     write_json(batch / "transaction.json", {
         **transaction,
         "state": "rolled-back",
@@ -1592,7 +1791,7 @@ def ensure_project_scaffold(
     slug: str,
     source_tasks: list[str],
     project_actions: list[dict[str, Any]],
-) -> None:
+) -> list[str]:
     """Create the project's stable entry documents without overwriting user files."""
     project.mkdir(parents=True, exist_ok=True)
     entries = {
@@ -1614,17 +1813,16 @@ def ensure_project_scaffold(
             + "".join(f"- `{task}`\n" for task in source_tasks)
             + "\n## Migrated files\n\n"
             + "".join(
-                f"- `{awaiting['source']}` -> `{awaiting['destination']}` "
-                f"(SHA256 `{awaiting['sha256']}`)\n"
+                f"- `{awaiting['source']}` -> `{awaiting['destination']}`\n"
                 for awaiting in project_actions
             )
         ),
         "AGENTS.md": (
             "# Project Instructions\n\n"
-            "- Treat this directory as the primary edit location for the project.\n"
-            "- Keep temporary work under `work/`; place deliverables under `outputs/`.\n"
-            "- Record source material and migrations in `source.md`.\n"
-            "- Do not copy credentials, databases, caches, or runtime logs into this project.\n"
+            "- Start with `README.md`; read `source.md` for provenance.\n"
+            "- Keep working files under `work/` and deliverables under `outputs/`.\n"
+            "- Use `work/checkpoints/` only for changes that actually need recovery.\n"
+            "- Do not copy credentials, databases, caches, or runtime logs here.\n"
         ),
     }
     created: list[str] = []
@@ -1633,21 +1831,7 @@ def ensure_project_scaffold(
         if not path.exists():
             write_text_atomic(path, content)
             created.append(str(path))
-    if project_actions:
-        (project / "outputs").mkdir(exist_ok=True)
-    (project / "work" / "checkpoints").mkdir(parents=True, exist_ok=True)
-    checkpoint = project / "work" / "checkpoints" / (
-        f"{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}-codex-optimizer.md"
-    )
-    write_text_atomic(
-        checkpoint,
-        "# Project Migration Checkpoint\n\n"
-        f"- Time: {iso_now()}\n"
-        f"- Project: `{slug}`\n"
-        f"- Files copied: {len(project_actions)}\n"
-        f"- Sources: {', '.join(source_tasks)}\n",
-    )
-    prune_checkpoints(project / "work" / "checkpoints", CHECKPOINT_KEEP)
+    return created
 
 
 def initialize_workspace(root: Path, codex_home: Path) -> dict[str, Any]:
@@ -1716,11 +1900,12 @@ def agents_block(root: Path) -> str:
         "  use `YYYY-MM-DD/<task>` for ordinary projectless sessions.",
         "- Keep project working files under the project's `work/` and deliverables",
         "  under `outputs/`.",
-        "- Hanako and Codex share this root. Before editing a shared project or",
-        "  shared work file, claim its lease and read `.optimize/COLLABORATION.md`;",
+        "- Use `quick-project` for explicit local or Git projects. Keep the full",
+        "  transaction for cleanup and strong checks for destructive changes;",
+        "  use size and mtime for ordinary copies.",
+        "- Hanako and Codex share this root. Claim a lease only when an active",
+        "  lease exists for your target, work is concurrent, or a handoff occurs;",
         "  keep independent Git checkouts and never depend on another Agent's cwd.",
-        "- Record handoffs and validation under `_temp/collaboration/`; checkpoint",
-        "  shared changes so both Agents can recover them.",
         "- Use `<root>/.optimize/codex-rules.json`; do not alter Hanako's",
         "  `.optimize/rules.json`, private Agent state, sessions, or credentials.",
         "- Cleanup must be evidence-backed and rollbackable. Never automatically",
@@ -1757,20 +1942,11 @@ def preview_agents(codex_home: Path, root: Path) -> str:
 def inject_agents(codex_home: Path, root: Path) -> dict[str, Any]:
     path = canonical(codex_home) / "AGENTS.md"
     preview = json.loads(preview_agents(codex_home, root))
-    backup = None
-    if path.exists():
-        backup_dir = canonical(root) / "_temp" / "trash" / (
-            "agents-" + dt.datetime.now().strftime("%Y%m%dT%H%M%S")
-        )
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        backup = backup_dir / "AGENTS.md"
-        shutil.copy2(path, backup)
     write_text_atomic(path, preview["content"])
     return {
         "status": "injected",
         "path": str(path),
         "action": preview["action"],
-        "backup": str(backup) if backup else None,
     }
 
 
@@ -1791,14 +1967,14 @@ def preview_shared_agents(root: Path) -> str:
         f"- Shared governance root: `{canonical(root)}`.",
         "- Shared projects are the primary edit location under `projects/<name>/`;",
         "  keep work in `work/` and deliverables in `outputs/`.",
-        "- Before editing a shared project or shared file, claim its lease in",
-        "  `_temp/collaboration/leases/` and record handoffs in `events.jsonl`.",
+        "- Claim a lease only when an active lease exists, work is concurrent, or",
+        "  a handoff occurs; ordinary single-Agent edits need no claim.",
         "- Read `.optimize/COLLABORATION.md`; each Agent keeps its own checkout,",
         "  rules file, credentials, sessions, and private runtime state.",
         "- Never write another Agent's private home. Do not depend on another",
         "  Agent's working directory; use absolute paths from this shared root.",
-        "- Cleanup and migration require evidence, hashes, checkpoints, and a",
-        "  rollback path. Never automatically delete unique or runtime data.",
+        "- Cleanup requires evidence, a readable plan, and a rollback path.",
+        "  Never automatically delete unique or runtime data.",
         "<!-- codex-optimizer-shared:end -->",
     ])
     pattern = re.compile(
@@ -1826,20 +2002,11 @@ def inject_shared_agents(root: Path) -> dict[str, Any]:
     root = canonical(root)
     path = root / "AGENTS.md"
     preview = json.loads(preview_shared_agents(root))
-    backup = None
-    if path.exists():
-        backup_dir = root / "_temp" / "trash" / (
-            "shared-agents-" + dt.datetime.now().strftime("%Y%m%dT%H%M%S")
-        )
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        backup = backup_dir / "AGENTS.md"
-        shutil.copy2(path, backup)
     write_text_atomic(path, preview["content"])
     return {
         "status": "injected",
         "path": str(path),
         "action": preview["action"],
-        "backup": str(backup) if backup else None,
     }
 
 
@@ -1851,18 +2018,21 @@ def collaboration_protocol(root: Path) -> str:
         f"- Shared governance root: `{canonical(root)}`.",
         "- Shared projects: `projects/<name>/`; work under `work/`, deliverables",
         "  under `outputs/`, provenance and migration state in `source.md`.",
-        "- Before editing a shared project or shared file, claim a lease under",
-        "  `_temp/collaboration/leases/` with `collaborate claim`.",
+        "- Check the lease directory when concurrency is plausible. Claim only",
+        "  when another lease is active, work will overlap, or a handoff occurs.",
         "- A lease is a coordination signal, not proof of ownership. Stop when an",
         "  active lease belongs to another Agent or files changed unexpectedly.",
-        "- Record handoffs with `collaborate handoff` and finish with a checkpoint.",
+        "- Record actual handoffs with `collaborate handoff`; a quick project",
+        "  adoption needs only its `source.md`, not a lease or checkpoint.",
         "- Keep separate Git checkouts. Never assume another Agent shares cwd, open",
         "  files, environment variables, sessions, credentials, or private state.",
         "- Do not edit another Agent's private home. Codex uses",
         "  `.optimize/codex-rules.json`; Hanako uses `.optimize/rules.json`.",
-        "- Delete only after evidence, hashes, checkpoints, and a rollback path;",
-        "  never automatically remove unique sources or runtime data.",
-        "- For conflicts, preserve both versions and record the hashes. Do not",
+        "- Delete only after evidence, a readable plan, and a rollback path.",
+        "  Use SHA256 when a cross-volume copy removes its source or content",
+        "  conflicts; never automatically remove unique sources or runtime data.",
+        "- For conflicts, preserve both versions and identify them by content.",
+        "  Strong hashes are useful here. Do not",
         "  overwrite content merely because another Agent wrote it more recently.",
         "<!-- collaboration-protocol:end -->",
         "",
@@ -1995,6 +2165,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect links only if they remain inside an allowed root.",
     )
 
+    quick = sub.add_parser(
+        "quick-project",
+        help="Adopt one explicit local or Git project without a cleanup plan.",
+    )
+    common(quick)
+    quick_source = quick.add_mutually_exclusive_group(required=True)
+    quick_source.add_argument("--source", type=Path)
+    quick_source.add_argument("--git-url")
+    quick.add_argument("--slug", default="")
+    quick.add_argument("--description", default="")
+    quick.add_argument(
+        "--move",
+        action="store_true",
+        help="Relocate a local source instead of copying it.",
+    )
+
     apply = sub.add_parser("apply", help="Validate and optionally execute a plan.")
     common(apply)
     apply.add_argument("--plan", type=Path, required=True)
@@ -2095,6 +2281,17 @@ def main(argv: list[str] | None = None) -> int:
                 output = root / "_temp" / "plans" / f"{stamp}-codex-optimizer-plan.json"
                 write_json(output, plan, exclusive=False)
                 print(f"Plan: {output} ({len(plan['actions'])} actions)")
+            return 0
+        if args.command == "quick-project":
+            result = quick_project(
+                root,
+                source=args.source,
+                git_url=args.git_url or "",
+                slug=args.slug,
+                move=args.move,
+                description=args.description,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == "apply":
             result = apply_plan(args.plan, root, codex_home, args.execute)

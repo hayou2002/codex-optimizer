@@ -46,6 +46,27 @@ $codex-optimizer
 
 初始化会创建混合目录骨架、补齐 `codex-rules.json`、预览并注入 `AGENTS.md` 标记块，再自动执行一次只读诊断。它不会自动创建定时任务，也不会立即清理。
 
+## 快速建立项目
+
+已经知道源目录或 Git URL 时，不需要先扫描全工作区、生成计划或申请租约：
+
+```powershell
+$cli = "$env:USERPROFILE\.codex\skills\codex-optimizer\scripts\codex_optimizer.py"
+$root = "$env:USERPROFILE\Desktop\OH-WorkSpace"
+
+# 复制本地项目，保留来源
+python $cli quick-project --root $root `
+  --source "D:\work\example" --slug "example"
+
+# 或克隆远端项目
+python $cli quick-project --root $root `
+  --git-url "https://github.com/example/project.git" --slug "example"
+```
+
+默认保留来源，补齐 `README.md`、`source.md` 和简短项目 `AGENTS.md`，做一次目标核验后结束。目标已存在就停止，不覆盖。仅当用户明确要求搬走本地来源时加 `--move`。
+
+安全清理仍使用完整计划与回滚；普通复制只核大小和修改时间，不另做逐文件 SHA256 与第二份备份。租约只在发现活跃并发或实际交接时使用。
+
 ## 目录模型
 
 ```text
@@ -79,19 +100,18 @@ OH-WorkSpace\
 
 两套 Agent 共用 `projects/`、`storage/`、`inbox/`、生命周期明确的 `_temp/` 内容和共享根 `AGENTS.md`，但各自保留安装、认证、会话、数据库、私密记忆、skills、automations 和规则文件。
 
-编辑共享项目前先读取 `.optimize/COLLABORATION.md`，检查并在需要时申请租约：
+发现活跃并发、需要接管租约或交接时，先读取 `.optimize/COLLABORATION.md`：
 
 ```powershell
 $cli = "$env:USERPROFILE\.codex\skills\codex-optimizer\scripts\codex_optimizer.py"
 $root = "$env:USERPROFILE\Desktop\OH-WorkSpace"
 $project = "$root\projects\example"
-python $cli collaborate status --root $root --target $project
-python $cli collaborate claim --root $root --target $project --agent codex --purpose "fix tests" --session-id "<session-id>"
-python $cli collaborate handoff --root $root --target $project --agent codex --next-agent hanako --summary "tests pass; source map updated"
-python $cli collaborate release --root $root --target $project --agent codex
+python $cli collaborate --root $root status --target $project
+python $cli collaborate --root $root claim --target $project --agent codex --purpose "fix tests"
+python $cli collaborate --root $root release --target $project --agent codex
 ```
 
-租约默认 30 分钟过期，只协调共享路径，不代表文件所有权。不同项目可并行；同一项目发生并发写入时按 `work/checkpoints/` 和 `events.jsonl` 核对并保留冲突双方。`handoff` 只记录交接，不代用户发送消息。
+单 Agent 的普通编辑不创建租约。租约默认 30 分钟过期，只协调共享路径，不代表文件所有权。`handoff` 只记录实际交接，不代用户发送消息。
 
 ## 与 hana-optimizer 隔离
 
@@ -148,7 +168,7 @@ python $cli rollback --root "$env:USERPROFILE\Desktop\OH-WorkSpace" --batch-id "
 
 - 诊断默认零写入。
 - 缓存必须有重建证据；唯一源、运行态、凭据和被引用文件不因超龄自动删除。
-- 所有删除先进入 `_temp/trash/<batch>`，JSONL manifest 记录源、目标、大小和 SHA256。
+- 所有删除先进入 `_temp/trash/<batch>`，JSONL manifest 记录源、目标、大小和修改时间；跨盘复制后删源、同名冲突和发布完整性才计算 SHA256。
 - 安全回收项保留 14 天；高风险项不会自动清空。
 - 回收区存在带 `transaction.json` 的完整批次时，可在到期后运行 `purge`；默认仍为 dry-run。
 - 批量失败自动恢复本次已执行步骤。

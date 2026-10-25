@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import time
 import tempfile
 import unittest
@@ -100,7 +101,7 @@ class DiagnosticTests(WorkspaceTestCase):
         self.assertEqual(len(report["cleanupCandidates"]), 1)
         self.assertIn("codexBytesApprox", report["totals"])
 
-    def test_plan_contains_directory_tree_hash(self) -> None:
+    def test_plan_uses_coarse_metadata_for_trash(self) -> None:
         cache = self.root / ".cache"
         cache.mkdir()
         (cache / "blob.bin").write_text("cache", encoding="utf-8")
@@ -113,7 +114,8 @@ class DiagnosticTests(WorkspaceTestCase):
         action = next(
             item for item in plan["actions"] if item["kind"] == "trash"
         )
-        self.assertEqual(action["sha256"], optimizer.tree_digest(cache))
+        self.assertEqual(action["sha256"], "")
+        self.assertEqual(action["size"], cache.stat().st_size)
 
     def test_referenced_cache_is_protected(self) -> None:
         cache = self.root / ".cache" / "artifact.bin"
@@ -177,11 +179,12 @@ class PlanValidationTests(WorkspaceTestCase):
                 plan_path, self.root, self.codex_home, execute=True
             )
 
-    def test_hash_drift_rejected(self) -> None:
+    def test_metadata_drift_rejected(self) -> None:
         cache = self.root / ".cache"
         cache.mkdir()
-        plan_path, _ = self.plan([self.trash_action(cache)])
-        (cache / "new.bin").write_text("changed", encoding="utf-8")
+        action = self.trash_action(cache)
+        action["mtime"] = float(action["mtime"]) - 10
+        plan_path, _ = self.plan([action])
         with self.assertRaises(optimizer.OptimizerError):
             optimizer.apply_plan(
                 plan_path, self.root, self.codex_home, execute=True
@@ -211,8 +214,9 @@ class PlanValidationTests(WorkspaceTestCase):
             "kind": "copy_project",
             "source": str(source),
             "destination": str(destination),
-            "sha256": optimizer.sha256_file(source),
+            "sha256": "",
             "size": source.stat().st_size,
+            "mtime": source.stat().st_mtime,
             "risk": "high",
             "references": [],
             "reason": "explicit project source",
@@ -386,6 +390,143 @@ class RecoveryAndBoundaryTests(WorkspaceTestCase):
 
 
 class ProjectAndConfigurationTests(WorkspaceTestCase):
+    def test_quick_project_copies_source_and_skips_runtime_data(self) -> None:
+        source = self.base / "simple-project"
+        source.mkdir()
+        (source / "README.md").write_text("# Existing\n", encoding="utf-8")
+        (source / "main.py").write_text("print('ok')\n", encoding="utf-8")
+        (source / "__pycache__").mkdir()
+        (source / "__pycache__" / "main.pyc").write_bytes(b"cache")
+        (source / ".env").write_text("TOKEN=secret", encoding="utf-8")
+        result = optimizer.quick_project(
+            self.root,
+            source=source,
+            slug="simple-project",
+        )
+        project = self.root / "projects" / "simple-project"
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["operation"], "copied")
+        self.assertEqual(
+            (project / "README.md").read_text(encoding="utf-8"),
+            "# Existing\n",
+        )
+        self.assertEqual(
+            (project / "main.py").read_text(encoding="utf-8"),
+            "print('ok')\n",
+        )
+        self.assertTrue((project / "source.md").is_file())
+        self.assertTrue((project / "AGENTS.md").exists())
+        self.assertFalse((project / "work").exists())
+        self.assertFalse((project / "outputs").exists())
+        self.assertFalse((project / "__pycache__").exists())
+        self.assertFalse((project / ".env").exists())
+        self.assertEqual(
+            result["ignoredSensitiveOrCacheItems"],
+            [".env", "__pycache__"],
+        )
+        self.assertTrue(source.exists())
+
+    def test_quick_project_refuses_existing_destination(self) -> None:
+        source = self.base / "existing-project"
+        source.mkdir()
+        destination = self.root / "projects" / "existing-project"
+        destination.mkdir()
+        (destination / "keep.txt").write_text("keep", encoding="utf-8")
+        with self.assertRaisesRegex(optimizer.OptimizerError, "already exists"):
+            optimizer.quick_project(self.root, source=source, slug="existing-project")
+        self.assertEqual(
+            (destination / "keep.txt").read_text(encoding="utf-8"),
+            "keep",
+        )
+
+    def test_quick_project_moves_local_source(self) -> None:
+        source = self.base / "move-me"
+        source.mkdir()
+        (source / "README.md").write_text("move", encoding="utf-8")
+        result = optimizer.quick_project(
+            self.root, source=source, slug="move-me", move=True
+        )
+        self.assertEqual(result["operation"], "moved")
+        self.assertFalse(source.exists())
+        self.assertEqual(
+            (
+                self.root / "projects" / "move-me" / "README.md"
+            ).read_text(encoding="utf-8"),
+            "move",
+        )
+
+    def test_quick_project_does_not_duplicate_metadata_or_recovery(self) -> None:
+        source = self.base / "lean-project"
+        source.mkdir()
+        for index in range(30):
+            (source / f"item-{index}.txt").write_text(
+                str(index),
+                encoding="utf-8",
+            )
+        result = optimizer.quick_project(
+            self.root,
+            source=source,
+            slug="lean-project",
+        )
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(
+            result["createdDocs"],
+            ["README.md", "source.md", "AGENTS.md"],
+        )
+        self.assertFalse(
+            (self.root / "projects" / "lean-project" / "work").exists()
+        )
+        self.assertFalse(
+            (self.root / "projects" / "lean-project" / "outputs").exists()
+        )
+        self.assertEqual(
+            list((self.root / "_temp" / "checkpoints").iterdir()),
+            [],
+        )
+
+    def test_quick_project_requires_git_cli_or_url(self) -> None:
+        with self.assertRaisesRegex(optimizer.OptimizerError, "exactly one"):
+            optimizer.quick_project(self.root)
+
+    def test_quick_project_clones_git_repository(self) -> None:
+        if not shutil.which("git"):
+            self.skipTest("git is unavailable")
+        source = self.base / "git-source"
+        source.mkdir()
+        subprocess.run(
+            ["git", "init", "-q", str(source)],
+            check=True,
+            capture_output=True,
+        )
+        (source / "README.md").write_text("# Clone me\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(source), "add", "README.md"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(source),
+                "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-qm", "initial",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        result = optimizer.quick_project(
+            self.root,
+            git_url=source.as_uri(),
+            slug="cloned-project",
+        )
+        project = self.root / "projects" / "cloned-project"
+        self.assertEqual(result["operation"], "cloned")
+        self.assertTrue((project / ".git").is_dir())
+        self.assertEqual(
+            (project / "README.md").read_text(encoding="utf-8"),
+            "# Clone me\n",
+        )
+        self.assertTrue((project / "source.md").is_file())
+
     def test_initialization_is_idempotent_and_preserves_values(self) -> None:
         rules = self.root / ".optimize" / "codex-rules.json"
         rules.parent.mkdir()
@@ -433,6 +574,7 @@ class ProjectAndConfigurationTests(WorkspaceTestCase):
         self.assertTrue((project / "README.md").exists())
         self.assertTrue((project / "source.md").exists())
         self.assertTrue((project / "AGENTS.md").exists())
+        self.assertFalse((project / "work" / "checkpoints").exists())
         self.assertEqual(result["status"], "executed")
         optimizer.rollback_batch(self.root, result["batchId"])
         self.assertFalse(project.exists())

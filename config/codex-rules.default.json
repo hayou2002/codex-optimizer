@@ -48,10 +48,16 @@
     "protectCodexState": true,
     "followLinks": false,
     "automaticHighRisk": false,
-    "hashBeforeMove": true,
+    "hashBeforeMove": false,
     "requireRegenerableEvidence": true
   },
   "projectPromotion": {
+    "quickPath": "explicit-source",
+    "defaultSourceAction": "copy",
+    "createReadmeWhenMissing": true,
+    "createSourceRecord": true,
+    "createProjectAgentsByDefault": false,
+    "createEmptyWorkOrOutputs": false,
     "weights": {
       "explicit": 5,
       "deliverables": 3,

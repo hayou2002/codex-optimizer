@@ -22,11 +22,11 @@ Hanako 与 Codex 共享同一个治理根 `OH-WorkSpace`。共享对象包括 `p
 
 1. 读取根 `AGENTS.md`、`.optimize/COLLABORATION.md`、项目的 `README.md`、`source.md` 和项目 `AGENTS.md`。
 2. 把目标解析成共享根内的绝对路径，并确认它与另一个 Agent 的私有状态不在同一个路径。
-3. 用 `collaborate status` 查看租约。空闲则 `claim`，写明 Agent、目的和会话 ID。
-4. 每次就地修改前核对文件 hash 或 Git 状态；发现租约期间内容变化时停止写入，记录差异。
+3. 仅在已有并发迹象时用 `collaborate status` 查看租约。发现另一 Agent 的活跃租约，或两个 Agent 将同时写入时才 `claim`，写明 Agent、目的和会话 ID。单 Agent 的短任务直接工作。
+4. 启用租约的并发写作在修改前核对 Git 状态或目标元数据；发现租约期间内容变化时停止写入，记录差异。单 Agent 小编辑不需要额外的 hash 前哨。
 5. 工作文件写 `work/`，交付物写 `outputs/`，来源与排除项写 `source.md`。
 6. 运行验证并写检查点，覆盖改了什么、为什么、结果、恢复路径。
-7. 通过 `handoff` 记录交接，再 `release` 租约。租约不能替代检查点。
+7. 实际移交时通过 `handoff` 记录交接，再 `release` 租约；单 Agent 完成任务直接释放自己持有的租约，不写虚假交接。
 
 ## 并发与冲突
 
@@ -64,10 +64,11 @@ projects/<slug>/
 
 ```powershell
 $cli = "$env:USERPROFILE\.codex\skills\codex-optimizer\scripts\codex_optimizer.py"
-python $cli collaborate status --root "$env:USERPROFILE\Desktop\OH-WorkSpace" --target "<project>"
-python $cli collaborate claim --root "$env:USERPROFILE\Desktop\OH-WorkSpace" --target "<project>" --agent codex --purpose "implement feature" --session-id "<id>"
-python $cli collaborate handoff --root "$env:USERPROFILE\Desktop\OH-WorkSpace" --target "<project>" --agent codex --next-agent hanako --summary "tests pass; source map updated"
-python $cli collaborate release --root "$env:USERPROFILE\Desktop\OH-WorkSpace" --target "<project>" --agent codex
+$root = "$env:USERPROFILE\Desktop\OH-WorkSpace"
+python $cli collaborate --root $root status --target "<project>"
+python $cli collaborate --root $root claim --target "<project>" --agent codex --purpose "implement feature" --session-id "<id>"
+python $cli collaborate --root $root handoff --target "<project>" --agent codex --next-agent hanako --summary "tests pass; source map updated"
+python $cli collaborate --root $root release --target "<project>" --agent codex
 ```
 
 `handoff` 只追加事件，不替用户发送消息。
@@ -75,6 +76,6 @@ python $cli collaborate release --root "$env:USERPROFILE\Desktop\OH-WorkSpace" -
 ## 与治理的关系
 
 - 清理前检查活跃租约和最后的检查点。租约覆盖的共享项目不进入自动回收。
-- 项目迁移时保留 `source.md`、hash、排除项和迁移状态，不因另一个 Agent 曾看过目录而视为完成迁移。
-- 检查点写入共享根 `_temp/checkpoints/`；项目内部另写 `work/checkpoints/`。
+- 项目迁移时保留 `source.md`、排除项和迁移状态；普通复制不逐文件记录 hash。跨盘后删源、同名冲突和发布完整性才记录 SHA256。
+- 普通快速归位由 `source.md` 记录；需要长期恢复记录的安全清理或实际协作只写一条简明检查点。
 - 多根失败隔离：一个项目失败不回滚无关项目；同批次内部仍按事务约束执行。

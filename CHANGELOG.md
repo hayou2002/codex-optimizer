@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 - 2026-10-26
+
+- Add `quick-project` for explicit local and Git project adoption.
+- Keep the full plan, hash, and rollback transaction for destructive or risky operations.
+- Keep a concise project `AGENTS.md` while skipping empty `work/`/`outputs/` trees.
+- Require collaboration leases only for actual overlap or handoffs.
+- Use size and mtime validation for copies and staging; reserve SHA256 and extra backups for destructive, conflict, or release paths.
+- Correct collaboration and diagnostic CLI examples.
+
 ## 0.1.0 - 2026-10-26
 
 - First Codex-native release.

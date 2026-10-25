@@ -1,5 +1,7 @@
 # 清理与回收
 
+本流程只用于删除、覆盖、跨盘移动、敏感数据或来源不唯一的场景。用户给出明确目录或 Git URL 的普通项目归位应使用 `quick-project`，不要先生成清理计划。
+
 ## 分类
 
 每个对象按两种属性分类：
@@ -45,10 +47,10 @@ Codex 主目录允许回收的对象严格限于明确可再生的缓存、临�
 - createdAt / expiresAt，默认 30 分钟
 - root 与 projectRoots
 - actions：move、trash、copy_project、rewrite_text、purge_trash
-- 每项 source、destination、size、SHA256、mtime、risk、reason、referenceHits
+- 每项 source、destination、size、mtime、risk、reason、referenceHits
 - planHash
 
-`apply` 默认 dry-run。`--execute` 前重新校验根边界、文件存在、hash、计划和动作大小。现场变化则拒绝执行。
+`apply` 默认 dry-run。`--execute` 前重新校验根边界、文件存在、计划、大小和修改时间。现场变化则拒绝执行。普通复制和同盘暂存不逐文件计算 SHA256；跨盘复制后删源、文本冲突和发布包完整性才强校验。
 
 ## 事务与回收区
 
@@ -65,7 +67,7 @@ manifest 每行至少记录：
 
 - batchId、timestamp
 - from、to
-- size、sha256、mtime
+- size、mtime；需要强校验的动作再记录 sha256
 - category、risk、reason
 - sourceRoot、rule
 

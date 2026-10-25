@@ -39,11 +39,11 @@ deletion, or removal of a date directory, show the concrete proposed actions.
 
 Use the current and related session file-access evidence to decide which files
 are actually in use. Existing projects are the primary edit location. Validate
-hashes and references before moving date directories to trash.
+references and current size/mtime before moving date directories to trash.
 
-Write the global and affected project checkpoints. Keep checkpoints to the latest
-20. Report reclaimed space, project changes, conflicts, retained items, and the
-rollback batch IDs.
+Write one concise checkpoint only for actual cleanup or collaboration. Keep
+checkpoints to the latest 20. Report reclaimed space, project changes, conflicts,
+retained items, and the rollback batch IDs.
 ```
 
 ## Prompt 约束
