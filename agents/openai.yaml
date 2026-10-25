@@ -1,0 +1,7 @@
+interface:
+  display_name: "Codex 优化大师"
+  short_description: "治理 Codex 工作区、项目、缓存、规则与记忆"
+  default_prompt: "Use $codex-optimizer to inspect my Codex workspace and open the action menu."
+policy:
+  allow_implicit_invocation: true
+

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "root": "C:/Users/Administrator/Desktop/OH-WorkSpace",
+  "projects": {
+    "discovery": "native-project-list",
+    "managedRoots": [],
+    "slugStyle": "english-kebab",
+    "scoreThreshold": 6,
+    "crossDateThreshold": 2,
+    "collaboration": {
+      "enabled": true,
+      "protocol": ".optimize/COLLABORATION.md",
+      "coordinationDir": "_temp/collaboration",
+      "leaseMinutes": 30,
+      "sharedAgents": ["codex", "hanako"]
+    }
+  },
+  "skeleton": {
+    "directories": [
+      "projects",
+      "storage",
+      "storage/docs",
+      "storage/backups",
+      "storage/tools",
+      "inbox",
+      "_temp",
+      "_temp/screenshots",
+      "_temp/data",
+      "_temp/scratch",
+      "_temp/exports",
+      "_temp/jobs",
+      "_temp/checkpoints",
+      "_temp/trash",
+      "_temp/plans",
+      ".optimize"
+    ]
+  },
+  "operation": {
+    "planTtlMinutes": 30,
+    "maxItemsPerBatch": 100,
+    "maxBytesPerBatch": 524288000,
+    "oversizedMB": 50,
+    "checkpointKeep": 20,
+    "trashRetentionDays": 14,
+    "deepScanDefault": false
+  },
+  "safety": {
+    "protectCodexState": true,
+    "followLinks": false,
+    "automaticHighRisk": false,
+    "hashBeforeMove": true,
+    "requireRegenerableEvidence": true
+  },
+  "projectPromotion": {
+    "weights": {
+      "explicit": 5,
+      "deliverables": 3,
+      "continuedUse": 2,
+      "formalArtifacts": 2,
+      "repeatedOccurrence": 2
+    },
+    "requireCrossDateForImplicit": true,
+    "explicitProjectBypassesScore": true,
+    "copyInUseOnly": true,
+    "largeAssetPolicy": "copy"
+  },
+  "restoration": {
+    "trashDir": "_temp/trash",
+    "checkpointsDir": "_temp/checkpoints",
+    "plansDir": "_temp/plans",
+    "exportsDir": "_temp/exports"
+  },
+  "textRewrite": {
+    "enabled": true,
+    "extensions": [
+      "md", "txt", "json", "jsonl", "toml", "yaml", "yml",
+      "py", "ps1", "js", "ts", "tsx", "jsx", "css", "html",
+      "gitignore"
+    ],
+    "protectedNames": [
+      "auth.json", "config.toml", ".env", "*.sqlite", "*.db"
+    ],
+    "maxBytes": 1048576
+  }
+}
+
