@@ -25,19 +25,23 @@
 The original date task also contained a WPS kdocs 2.7.6 package and expansion.
 Its 399 files now match the installed
 `C:\Users\Administrator\.codex\skills\kdocs` copy by SHA256 and are reproducible
-from the public package URL.
+from the public package URL. The downloaded package and provenance record are
+archived at `C:\Users\Administrator\Desktop\OH-WorkSpace\storage\tools\kdocs-2.7.6\`.
 
 The source date directory also contains:
 
 - `work\codex-manual\codex-manual.md`
 - `work\codex-manual\codex-manual.outline.md`
 
-These are independent Codex reference material. The project-local copy and
-source hash are under `work\source-archive\codex-manual\`.
+These are independent Codex reference material. The shared archival copy and
+source hashes are under
+`C:\Users\Administrator\Desktop\OH-WorkSpace\storage\docs\codex-manual\`;
+they are not runtime files of this project.
 
 ## Date task migration status
 
-The full migration conditions are not yet all satisfied. The kdocs copy is
-installed and reproducible, but the archived manual and source navigation
-session still provide provenance. The date directory is retained until the
-archive hashes are verified and an explicit final soft-delete decision is made.
+The source date task is eligible for soft deletion: its project material is
+published, its independent manual is archived with hashes, its kdocs expansion
+matches the installed copy, and configurable text contains no reference to the
+date path. The batch manifest and rollback record are kept under
+`_temp/trash/`.
