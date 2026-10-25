@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Codex 优化大师功能与使用概览</title>
+  <desc id="desc">四个治理板块、四个动作、安全执行流程，以及 Codex 与 Hanako 共享工作根协作。</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="0.58" stop-color="#eef3f7"/>
+      <stop offset="1" stop-color="#e8eef4"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22a699"/>
+      <stop offset="1" stop-color="#16756d"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.07"/>
+    </filter>
+    <style>
+      text { font-family: "Segoe UI", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif; }
+      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 1.4px; fill: #64748b; }
+      .card-title { font-size: 18px; font-weight: 700; fill: #0f172a; }
+      .body { font-size: 13px; fill: #64748b; }
+      .small { font-size: 11.5px; fill: #7c899b; }
+      .label { font-size: 12px; font-weight: 700; fill: #ffffff; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="720" rx="28" fill="url(#background)"/>
+  <rect width="1200" height="7" rx="3.5" fill="url(#accent)"/>
+  <rect x="36" y="32" width="1128" height="128" rx="22" fill="url(#hero)" filter="url(#shadow)"/>
+  <circle cx="1080" cy="96" r="68" fill="#ffffff" opacity="0.05"/>
+  <circle cx="1097" cy="80" r="30" fill="#22a699" opacity="0.18"/>
+  <text x="70" y="76" class="eyebrow" fill="#94a3b8">CODEX · WORKSPACE GOVERNANCE</text>
+  <text x="70" y="113" font-size="31" font-weight="700" fill="#ffffff">Codex 优化大师</text>
+  <text x="70" y="142" font-size="15" fill="#cbd5e1">把工作区清理、项目迁移、规则和记忆整理，变成可审计、可恢复的文件事务。</text>
+  <rect x="841" y="69" width="118" height="31" rx="15.5" fill="#22a699" opacity="0.22"/>
+  <text x="900" y="90" text-anchor="middle" font-size="12.5" font-weight="700" fill="#bbf7ef">$codex-optimizer</text>
+  <rect x="971" y="69" width="134" height="31" rx="15.5" fill="#ffffff" opacity="0.10"/>
+  <text x="1038" y="90" text-anchor="middle" font-size="12.5" font-weight="600" fill="#e2e8f0">v0.1.0 · Codex</text>
+
+  <text x="54" y="198" class="eyebrow">FOUR GOVERNANCE PLANES</text>
+  <g filter="url(#shadow)">
+    <rect x="42" y="214" width="264" height="114" rx="17" fill="#ffffff"/>
+    <rect x="58" y="232" width="30" height="30" rx="9" fill="#e3f5f2"/>
+    <path d="M66 247h14M66 242h14M66 252h8" stroke="#16756d" stroke-width="2" stroke-linecap="round"/>
+    <text x="98" y="252" class="card-title">默认工作根</text>
+    <text x="58" y="284" class="body">日期任务 · 项目 · 临时落点</text>
+    <text x="58" y="307" class="small">扫描 / 迁移 / 证据驱动回收</text>
+
+    <rect x="320" y="214" width="264" height="114" rx="17" fill="#ffffff"/>
+    <rect x="336" y="232" width="30" height="30" rx="9" fill="#eaf0f6"/>
+    <path d="M343 242h16v12h-16zM346 238h10" fill="none" stroke="#475569" stroke-width="2" stroke-linejoin="round"/>
+    <text x="376" y="252" class="card-title">已添加项目</text>
+    <text x="336" y="284" class="body">原生项目列表动态纳入</text>
+    <text x="336" y="307" class="small">共享规则 · 项目主编辑位</text>
+
+    <rect x="598" y="214" width="264" height="114" rx="17" fill="#ffffff"/>
+    <rect x="614" y="232" width="30" height="30" rx="9" fill="#edf1f5"/>
+    <path d="M620 244h18v13h-18zM624 240h10v4" fill="none" stroke="#475569" stroke-width="2" stroke-linejoin="round"/>
+    <text x="654" y="252" class="card-title">Codex 主目录</text>
+    <text x="614" y="284" class="body">缓存审计 · 敏感状态保护</text>
+    <text x="614" y="307" class="small">认证 / 会话 / 数据库 / skills</text>
+
+    <rect x="876" y="214" width="282" height="114" rx="17" fill="#ffffff"/>
+    <rect x="892" y="232" width="30" height="30" rx="9" fill="#f0f3f6"/>
+    <path d="M898 247h18M907 238v18" stroke="#475569" stroke-width="2" stroke-linecap="round"/>
+    <text x="932" y="252" class="card-title">知识与规则</text>
+    <text x="892" y="284" class="body">AGENTS · memories · skills</text>
+    <text x="892" y="307" class="small">低风险自动，高风险先审阅</text>
+  </g>
+
+  <text x="54" y="372" class="eyebrow">ACTION MENU</text>
+  <g filter="url(#shadow)">
+    <rect x="42" y="388" width="264" height="98" rx="17" fill="#ffffff"/>
+    <circle cx="72" cy="422" r="16" fill="url(#accent)"/>
+    <text x="72" y="427" text-anchor="middle" class="label">01</text>
+    <text x="101" y="421" class="card-title">初始化</text>
+    <text x="101" y="444" class="small">骨架 · 配置 · 规则块</text>
+    <text x="61" y="470" class="body">补齐后立即做只读诊断</text>
+
+    <rect x="320" y="388" width="264" height="98" rx="17" fill="#ffffff"/>
+    <circle cx="350" cy="422" r="16" fill="#475569"/>
+    <text x="350" y="427" text-anchor="middle" class="label">02</text>
+    <text x="379" y="421" class="card-title">优化</text>
+    <text x="379" y="444" class="small">扫描 · 计划 · 执行</text>
+    <text x="339" y="470" class="body">清理可再生缓存与重复文件</text>
+
+    <rect x="598" y="388" width="264" height="98" rx="17" fill="#ffffff"/>
+    <circle cx="628" cy="422" r="16" fill="#64748b"/>
+    <text x="628" y="427" text-anchor="middle" class="label">03</text>
+    <text x="657" y="421" class="card-title">整理</text>
+    <text x="657" y="444" class="small">项目化 · 引用 · 记忆</text>
+    <text x="617" y="470" class="body">日期任务中保留真实来源</text>
+
+    <rect x="876" y="388" width="282" height="98" rx="17" fill="#ffffff"/>
+    <circle cx="906" cy="422" r="16" fill="#94a3b8"/>
+    <text x="906" y="427" text-anchor="middle" class="label">00</text>
+    <text x="935" y="421" class="card-title">功能</text>
+    <text x="935" y="444" class="small">查看能力与边界</text>
+    <text x="895" y="470" class="body">说“优化大师”也会打开菜单</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="42" y="510" width="636" height="154" rx="19" fill="#ffffff"/>
+    <text x="64" y="540" class="eyebrow">SAFE EXECUTION</text>
+    <text x="64" y="568" font-size="18" font-weight="700" fill="#0f172a">每一批改动都可解释、可验证、可回滚</text>
+    <g font-size="12.5" font-weight="600" fill="#334155">
+      <rect x="64" y="588" width="78" height="34" rx="17" fill="#eef3f7"/>
+      <text x="103" y="610" text-anchor="middle">只读扫描</text>
+      <text x="151" y="610" text-anchor="middle" fill="#94a3b8">→</text>
+      <rect x="166" y="588" width="78" height="34" rx="17" fill="#eef3f7"/>
+      <text x="205" y="610" text-anchor="middle">签名计划</text>
+      <text x="253" y="610" text-anchor="middle" fill="#94a3b8">→</text>
+      <rect x="268" y="588" width="82" height="34" rx="17" fill="#e3f5f2" stroke="#22a699"/>
+      <text x="309" y="610" text-anchor="middle" fill="#16756d">风险复核</text>
+      <text x="359" y="610" text-anchor="middle" fill="#94a3b8">→</text>
+      <rect x="374" y="588" width="78" height="34" rx="17" fill="#eef3f7"/>
+      <text x="413" y="610" text-anchor="middle">软删批次</text>
+      <text x="461" y="610" text-anchor="middle" fill="#94a3b8">→</text>
+      <rect x="476" y="588" width="78" height="34" rx="17" fill="#eef3f7"/>
+      <text x="515" y="610" text-anchor="middle">检查点</text>
+    </g>
+    <text x="577" y="610" class="small">回滚时保留冲突原样</text>
+    <rect x="64" y="638" width="590" height="1" fill="#e7edf3"/>
+    <text x="64" y="654" class="small">保护：认证 · 配置 · 会话 · 记忆 · 数据库 · 插件 · skills · secrets</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="696" y="510" width="462" height="154" rx="19" fill="#0f172a"/>
+    <text x="720" y="540" class="eyebrow" fill="#94a3b8">SHARED WORKSPACE</text>
+    <text x="720" y="568" font-size="18" font-weight="700" fill="#ffffff">Codex + Hanako 同一工作根</text>
+    <rect x="720" y="588" width="115" height="42" rx="12" fill="#1e293b"/>
+    <text x="777" y="614" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Codex</text>
+    <path d="M849 609h40" stroke="#475569" stroke-width="2"/>
+    <circle cx="869" cy="609" r="3" fill="#22a699"/>
+    <rect x="903" y="588" width="115" height="42" rx="12" fill="#1e293b"/>
+    <text x="960" y="614" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Hanako</text>
+    <path d="M1032 609h102" stroke="#475569" stroke-width="2" stroke-dasharray="5 4"/>
+    <rect x="720" y="642" width="414" height="1" fill="#334155"/>
+    <text x="720" y="656" class="small" fill="#94a3b8">共享 projects / storage / inbox · 各自持有私有状态与规则</text>
+  </g>
+
+  <text x="54" y="699" font-size="11.5" fill="#7c899b">治理根默认：OH-WorkSpace · 项目主编辑位：projects/&lt;name&gt; · 普通会话：YYYY-MM-DD/&lt;task&gt;</text>
+  <text x="1148" y="699" text-anchor="end" font-size="11.5" fill="#7c899b">hayou2002/codex-optimizer</text>
+</svg>

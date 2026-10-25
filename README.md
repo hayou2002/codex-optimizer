@@ -1,5 +1,7 @@
 # codex-optimizer · Codex 优化大师
 
+![Codex 优化大师功能与使用概览](assets/overview.svg)
+
 把工作区治理变成可审计、可恢复的 Codex 文件事务。它治理默认工作根、日期任务目录、Codex 已添加项目、Codex 主目录、规则、技能、自动化和生成记忆。首版还提供 Codex 与 Hanako 在同一个根目录下协作的租约、交接和检查点协议。
 
 本项目是 [hana-optimizer](https://github.com/hayou2002/hana-optimizer) 的独立 Codex 适配版，吸收了上游 PR #1 的环境对位、实例痕迹清理和悬空引用修复。它作为独立项目维护，不是原仓库的自动镜像。
