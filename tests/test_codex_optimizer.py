@@ -117,6 +117,34 @@ class DiagnosticTests(WorkspaceTestCase):
         self.assertEqual(action["sha256"], "")
         self.assertEqual(action["size"], cache.stat().st_size)
 
+    def test_plan_does_not_hash_trash_candidates(self) -> None:
+        cache = self.root / ".cache"
+        cache.mkdir()
+        (cache / "blob.bin").write_text("cache", encoding="utf-8")
+        report = optimizer.build_report(self.root, self.codex_home, [])
+        original = optimizer.sha256_file
+        calls: list[str] = []
+
+        def record_hash(path: Path) -> str:
+            calls.append(str(path))
+            return original(path)
+
+        optimizer.sha256_file = record_hash
+        try:
+            plan = optimizer.create_plan(report, self.root, self.codex_home)
+        finally:
+            optimizer.sha256_file = original
+        self.assertEqual(
+            [
+                item for item in plan["actions"]
+                if item["kind"] == "trash"
+            ][0]["sha256"],
+            "",
+        )
+        self.assertFalse(
+            any(Path(value).is_relative_to(cache) for value in calls)
+        )
+
     def test_referenced_cache_is_protected(self) -> None:
         cache = self.root / ".cache" / "artifact.bin"
         cache.parent.mkdir()

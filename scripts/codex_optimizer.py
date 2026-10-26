@@ -290,7 +290,7 @@ def tree_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def path_record(path: Path) -> dict[str, Any]:
+def path_record(path: Path, *, include_hash: bool = True) -> dict[str, Any]:
     try:
         stat = path.stat()
     except OSError as exc:
@@ -301,7 +301,7 @@ def path_record(path: Path) -> dict[str, Any]:
         "mtime": stat.st_mtime,
         "is_dir": path.is_dir(),
     }
-    if path.is_file():
+    if include_hash and path.is_file():
         record["sha256"] = sha256_file(path)
     return record
 
@@ -1291,10 +1291,11 @@ def create_plan(
             continue
         path = Path(candidate["path"])
         try:
-            record = path_record(path)
+            record = path_record(path, include_hash=False)
         except OptimizerError as exc:
             report["errors"].append(str(exc))
             continue
+        record["sha256"] = ""
         actions.append({
             "kind": "trash",
             "source": record["path"],

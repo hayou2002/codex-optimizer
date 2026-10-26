@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1 - 2026-10-26
+
+- Replace the fixed five-item environment check with action-scoped evidence.
+- Stop running a full read-only diagnostic after initialization.
+- Avoid hashing cleanup candidates during plan creation when the digest is not
+  used by the trash transaction.
+- Unify phase validation under one verification budget.
+
 ## 0.4.0 - 2026-10-26
 
 - Add `organize-scan` for a single read-only inventory during `03`.
